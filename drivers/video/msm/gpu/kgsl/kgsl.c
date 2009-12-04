@@ -117,6 +117,8 @@ static void kgsl_clk_enable(void)
 {
 	clk_set_rate(kgsl_driver.ebi1_clk, 128000000);
 	clk_enable(kgsl_driver.imem_clk);
+	if (kgsl_driver.grp_pclk)
+		clk_enable(kgsl_driver.grp_pclk);
 	clk_enable(kgsl_driver.grp_clk);
 #ifdef CONFIG_ARCH_MSM7227
 	clk_enable(kgsl_driver.grp_pclk);
@@ -129,6 +131,8 @@ static void kgsl_clk_disable(void)
 	clk_disable(kgsl_driver.grp_pclk);
 #endif
 	clk_disable(kgsl_driver.grp_clk);
+	if (kgsl_driver.grp_pclk)
+		clk_disable(kgsl_driver.grp_pclk);
 	clk_disable(kgsl_driver.imem_clk);
 	clk_set_rate(kgsl_driver.ebi1_clk, 0);
 }
@@ -256,11 +260,9 @@ static int kgsl_release(struct inode *inodep, struct file *filep)
 		kgsl_remove_mem_entry(entry);
 
 	if (private->pagetable != NULL) {
-#ifdef PER_PROCESS_PAGE_TABLE
 		kgsl_yamato_cleanup_pt(&kgsl_driver.yamato_device,
 					private->pagetable);
 		kgsl_mmu_destroypagetableobject(private->pagetable);
-#endif
 		private->pagetable = NULL;
 	}
 
@@ -314,22 +316,19 @@ static int kgsl_open(struct inode *inodep, struct file *filep)
 	kgsl_hw_get_locked();
 
 	/*NOTE: this must happen after first_open */
-#ifdef PER_PROCESS_PAGE_TABLE
 	private->pagetable =
 		kgsl_mmu_createpagetableobject(&kgsl_driver.yamato_device.mmu);
 	if (private->pagetable == NULL) {
 		result = -ENOMEM;
 		goto done;
 	}
-	result = kgsl_yamato_setup_pt(device, private->pagetable);
+	result = kgsl_yamato_setup_pt(&kgsl_driver.yamato_device,
+					private->pagetable);
 	if (result) {
 		kgsl_mmu_destroypagetableobject(private->pagetable);
 		private->pagetable = NULL;
 		goto done;
 	}
-#else
-	private->pagetable = kgsl_driver.yamato_device.mmu.hwpagetable;
-#endif
 	private->vmalloc_size = 0;
 done:
 	kgsl_hw_put_locked(true);
@@ -433,14 +432,12 @@ static long kgsl_ioctl_device_waittimestamp(struct kgsl_file_private *private,
 		goto done;
 	}
 
-	mutex_unlock(&kgsl_driver.mutex);
 	/* Don't wait forever, set a max value for now */
 	if (param.timeout == -1)
 		param.timeout = 10 * MSEC_PER_SEC;
 	result = kgsl_yamato_waittimestamp(&kgsl_driver.yamato_device,
 				     param.timestamp,
 				     param.timeout);
-	mutex_lock(&kgsl_driver.mutex);
 
 	kgsl_yamato_runpending(&kgsl_driver.yamato_device);
 done:
@@ -1165,6 +1162,13 @@ static int __devinit kgsl_platform_probe(struct platform_device *pdev)
 		goto done;
 	}
 	kgsl_driver.grp_clk = clk;
+
+	clk = clk_get(&pdev->dev, "grp_pclk");
+	if (IS_ERR(clk)) {
+		KGSL_DRV_ERR("no grp_pclk, continuing\n");
+		clk = NULL;
+	}
+	kgsl_driver.grp_pclk = clk;
 
 	clk = clk_get(&pdev->dev, "imem_clk");
 	if (IS_ERR(clk)) {
