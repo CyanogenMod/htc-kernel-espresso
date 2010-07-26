@@ -806,7 +806,7 @@ int ov9665_sensor_config(void __user *argp)
 		rc = ov9665_set_contrast(cfg_data.cfg.contrast_value);
 		break;
 	default:
-		rc = -EINVAL;
+		printk(KERN_ERR "unhandled cfgtype: %d\n", cfg_data.cfgtype);
 		break;
 	}
 

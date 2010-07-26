@@ -2414,7 +2414,7 @@ int ov8810_sensor_config(void __user *argp)
 			break;
 
 		default:
-			rc = -EFAULT;
+			printk(KERN_ERR "unhandled cfgtype: %d\n", cdata.cfgtype); 
 			break;
 		}
 
