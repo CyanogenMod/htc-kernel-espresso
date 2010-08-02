@@ -1,14 +1,14 @@
 /*
  * DHD Protocol Module for CDC and BDC.
  *
- * Copyright (C) 1999-2009, Broadcom Corporation
- *
+ * Copyright (C) 1999-2010, Broadcom Corporation
+ * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
  * under the terms of the GNU General Public License version 2 (the "GPL"),
  * available at http://www.broadcom.com/licenses/GPLv2.php, with the
  * following added to such license:
- *
+ * 
  *      As a special exception, the copyright holders of this software give you
  * permission to link this software with independent modules, and to copy and
  * distribute the resulting executable under terms of your choice, provided that
@@ -16,12 +16,12 @@
  * the license of that module.  An independent module is a module which is not
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
- *
+ * 
  *      Notwithstanding the above, under no circumstances may you combine this
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_cdc.c,v 1.22.4.2.4.7.2.30 2009/10/28 21:38:04 Exp $
+ * $Id: dhd_cdc.c,v 1.22.4.2.4.7.2.41 2010/06/23 19:58:18 Exp $
  *
  * BDC is like CDC, except it includes a header for data packets to convey
  * packet priority over the bus, and flags (e.g. to indicate checksum status
@@ -41,22 +41,7 @@
 #include <dhd_bus.h>
 #include <dhd_dbg.h>
 
-#if defined(IL_BIGENDIAN)
-#include <bcmendian.h>
-#define htod32(i) (bcmswap32(i))
-#define htod16(i) (bcmswap16(i))
-#define dtoh32(i) (bcmswap32(i))
-#define dtoh16(i) (bcmswap16(i))
-#define htodchanspec(i) htod16(i)
-#define dtohchanspec(i) dtoh16(i)
-#else
-#define htod32(i) i
-#define htod16(i) i
-#define dtoh32(i) i
-#define dtoh16(i) i
-#define htodchanspec(i) i
-#define dtohchanspec(i) i
-#endif
+extern int dhd_preinit_ioctls(dhd_pub_t *dhd);
 
 /* Packet alignment for most efficient SDIO (can change based on platform) */
 #ifndef DHD_SDALIGN
@@ -137,10 +122,7 @@ dhdcdc_query_ioctl(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len)
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
 	DHD_CTL(("%s: cmd %d len %d\n", __FUNCTION__, cmd, len));
 
-#ifdef WLAN_PROTECT
-	if (dhd->busstate == DHD_BUS_DOWN)
-		return -1;
-#endif
+
 	/* Respond "bcmerror" and "bcmerrorstr" with local cache */
 	if (cmd == WLC_GET_VAR && buf)
 	{
@@ -160,9 +142,9 @@ dhdcdc_query_ioctl(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len)
 
 	msg->cmd = htol32(cmd);
 	msg->len = htol32(len);
-	flags = (++prot->reqid << CDCF_IOC_ID_SHIFT);
-	msg->flags = htol32(flags);
+	msg->flags = (++prot->reqid << CDCF_IOC_ID_SHIFT);
 	CDC_SET_IF_IDX(msg, ifidx);
+	msg->flags = htol32(msg->flags);
 
 	if (buf)
 		memcpy(prot->buf, buf, len);
@@ -212,7 +194,7 @@ done:
 	return ret;
 }
 
-static int
+int
 dhdcdc_set_ioctl(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len)
 {
 	dhd_prot_t *prot = dhd->prot;
@@ -223,17 +205,13 @@ dhdcdc_set_ioctl(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len)
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
 	DHD_CTL(("%s: cmd %d len %d\n", __FUNCTION__, cmd, len));
 
-#ifdef WLAN_PROTECT
-	if (dhd->busstate == DHD_BUS_DOWN)
-		return -1;
-#endif
 	memset(msg, 0, sizeof(cdc_ioctl_t));
 
 	msg->cmd = htol32(cmd);
 	msg->len = htol32(len);
-	flags = (++prot->reqid << CDCF_IOC_ID_SHIFT) | CDCF_IOC_SET;
-	msg->flags |= htol32(flags);
+	msg->flags = (++prot->reqid << CDCF_IOC_ID_SHIFT) | CDCF_IOC_SET;
 	CDC_SET_IF_IDX(msg, ifidx);
+	msg->flags = htol32(msg->flags);
 
 	if (buf)
 		memcpy(prot->buf, buf, len);
@@ -311,7 +289,6 @@ dhd_prot_ioctl(dhd_pub_t *dhd, int ifidx, wl_ioctl_t * ioc, void * buf, int len)
 		ret = 0;
 	else {
 		cdc_ioctl_t *msg = &prot->msg;
-		CDC_SET_IF_IDX(msg, ifidx);
 		ioc->needed = ltoh32(msg->len); /* len == needed when set/query fails from dongle */
 	}
 
@@ -533,555 +510,31 @@ dhd_prot_dstats(dhd_pub_t *dhd)
 	dhd->dstats.multicast = dhd->rx_multicast;
 	return;
 }
-#define htod32(i) i
-#define htod16(i) i
-
-#ifdef WLAN_PFN
-typedef struct pfn_ssid {
-	char		ssid[32];			
-	int32		ssid_len;		
-	uint32		weight;
-} pfn_ssid_t;
-
-typedef struct pfn_ssid_set {
-	pfn_ssid_t	pfn_ssids[MAX_PFN_NUMBER];
-} pfn_ssid_set_t;
-
-static pfn_ssid_set_t pfn_ssid_set;
-
-int dhd_set_pfn_ssid(char * ssid, int ssid_len)
-{
-	uint32 i, lightest, weightest, samessid = 0xffff;
-
-	if ((ssid_len < 1) || (ssid_len > 32)) {
-		printk("Invaild ssid length!\n");
-		return -1;
-	}
-	printk("pfn: set ssid = %s\n", ssid);
-	lightest = 0;
-	weightest =	0;
-	for (i = 0; i < MAX_PFN_NUMBER; i++)
-	{
-		if (pfn_ssid_set.pfn_ssids[i].weight < pfn_ssid_set.pfn_ssids[lightest].weight)
-			lightest = i;
-
-		if (pfn_ssid_set.pfn_ssids[i].weight > pfn_ssid_set.pfn_ssids[weightest].weight)
-			weightest = i;
-
-		if (!strcmp(ssid, pfn_ssid_set.pfn_ssids[i].ssid))
-			samessid = i;
-	}
-
-	printk("lightest is %d, weightest is %d, samessid = %d\n", lightest, weightest, samessid);
-
-	if (samessid != 0xffff) {
-		if (samessid == weightest) {
-			printk("connect to latest ssid, ignore!\n");
-			return 0;
-		}
-		pfn_ssid_set.pfn_ssids[samessid].weight = pfn_ssid_set.pfn_ssids[weightest].weight + 1;
-		return 0;
-	}
-	memset(&pfn_ssid_set.pfn_ssids[lightest], 0, sizeof(pfn_ssid_t));
-
-	strncpy(pfn_ssid_set.pfn_ssids[lightest].ssid, ssid, ssid_len);
-	pfn_ssid_set.pfn_ssids[lightest].ssid_len = ssid_len;
-	pfn_ssid_set.pfn_ssids[lightest].weight = pfn_ssid_set.pfn_ssids[weightest].weight + 1;
-	
-	return 0;
-}
-
-static int dhd_set_pfn(dhd_pub_t *dhd, int enabled)
-{
-	wl_pfn_param_t pfn_param;
-	char iovbuf[64];
-	int pfn_enabled = 0;
-	wl_pfn_t	pfn_element;
-	int i;
-	int config_network = 0;
-	/* Disable pfn */
-	bcm_mkiovar("pfn", (char *)&pfn_enabled, 4, iovbuf, sizeof(iovbuf));
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-
-	if (!enabled)
-		return 0;
-	
-	/* clear pfn */
-	bcm_mkiovar("pfnclear", NULL, 0, iovbuf, sizeof(iovbuf));
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-
-	/* set pfn parameters */
-	pfn_param.version = htod32(PFN_VERSION);
-	pfn_param.flags = htod16((PFN_LIST_ORDER << SORT_CRITERIA_BIT));
-	/* Scan frequency of 30 sec */
-	pfn_param.scan_freq = htod32(PFN_SCAN_FREQ);
-	/* RSSI margin of 30 dBm */
-	pfn_param.rssi_margin = htod16(30);
-	/* Network timeout 60 sec */
-	pfn_param.lost_network_timeout = htod32(60);
-
-	bcm_mkiovar("pfn_set", (char *)&pfn_param, sizeof(pfn_param), iovbuf, sizeof(iovbuf));
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-
-	/* set all pfn ssid */
-	for (i = 0; i < MAX_PFN_NUMBER; i++) {
-		if (pfn_ssid_set.pfn_ssids[i].ssid[0]) {
-			pfn_element.bss_type = htod32(DOT11_BSSTYPE_INFRASTRUCTURE);
-			pfn_element.auth = (DOT11_OPEN_SYSTEM);
-			pfn_element.wpa_auth = htod32(WPA_AUTH_PFN_ANY);
-			pfn_element.wsec = htod32(0);
-			pfn_element.infra = htod32(1);
-
-			strncpy((char *)pfn_element.ssid.SSID, pfn_ssid_set.pfn_ssids[i].ssid,
-		        sizeof(pfn_element.ssid.SSID));
-			pfn_element.ssid.SSID_len = pfn_ssid_set.pfn_ssids[i].ssid_len;
-
-			bcm_mkiovar("pfn_add", (char *)&pfn_element, sizeof(pfn_element), iovbuf, sizeof(iovbuf));
-			dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-			config_network++;
-		}
-	}
-
-	/* Enable pfn */
-	if (config_network) {
-		printk("enable pfn!\n");
-		pfn_enabled=1;
-		bcm_mkiovar("pfn", (char *)&pfn_enabled, 4, iovbuf, sizeof(iovbuf));
-		dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-	}
-
-	return 0;
-	
-
-}
-#endif
-int dhd_set_suspend(int value, dhd_pub_t *dhd)
-{
-	int power_mode = PM_MAX;
-#if 0
-	wl_pkt_filter_enable_t	enable_parm;
-#endif
-	char iovbuf[32];
-	int bcn_li_dtim = 3;
-
-
-	if (dhd && dhd->up) {
-		dhd_os_proto_block(dhd);
-		if (value) {
-			dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM,
-				(char *)&power_mode, sizeof(power_mode));
-#if 0
-			/* Enable packet filter, only allow unicast packet to send up */
-			enable_parm.id = htod32(100);
-			enable_parm.enable = htod32(1);
-			bcm_mkiovar("pkt_filter_enable", (char *)&enable_parm,
-				sizeof(wl_pkt_filter_enable_t), iovbuf, sizeof(iovbuf));
-			dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-#endif
-			/* set bcn_li_dtim */
-			bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
-				4, iovbuf, sizeof(iovbuf));
-			dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-#ifdef WLAN_PFN
-			/* set pfn */
-			dhd_set_pfn(dhd, 1);
-#endif
-
-		} else {
-			power_mode = PM_FAST;
-			dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM, (char *)&power_mode,
-				sizeof(power_mode));
-#if 0
-			/* disable pkt filter */
-			enable_parm.id = htod32(100);
-			enable_parm.enable = htod32(0);
-			bcm_mkiovar("pkt_filter_enable", (char *)&enable_parm,
-				sizeof(wl_pkt_filter_enable_t), iovbuf, sizeof(iovbuf));
-			dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-#endif
-			/* set bcn_li_dtim */
-			bcn_li_dtim = 0;
-			bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
-				4, iovbuf, sizeof(iovbuf));
-			dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-#ifdef WLAN_PFN
-				dhd_set_pfn(dhd, 0);
-#endif
-		}
-		dhd_os_proto_unblock(dhd);
-	}
-
-	return 0;
-}
-
-#define strtoul(nptr, endptr, base) bcm_strtoul((nptr), (endptr), (base))
-
-/* Convert user's input in hex pattern to byte-size mask */
-static int
-wl_pattern_atoh(char *src, char *dst)
-{
-	int i;
-	if (strncmp(src, "0x", 2) != 0 &&
-	    strncmp(src, "0X", 2) != 0) {
-		printf("Mask invalid format. Needs to start with 0x\n");
-		return -1;
-	}
-	src = src + 2; /* Skip past 0x */
-	if (strlen(src) % 2 != 0) {
-		printf("Mask invalid format. Needs to be of even length\n");
-		return -1;
-	}
-	for (i = 0; *src != '\0'; i++) {
-		char num[3];
-		strncpy(num, src, 2);
-		num[2] = '\0';
-		dst[i] = (uint8)strtoul(num, NULL, 16);
-		src += 2;
-	}
-	return i;
-}
-
-static dhd_pub_t *pdhd = NULL;
-int dhd_set_pktfilter(int add, int id, int offset, char *mask, char *pattern)
-{
-	char 				*str;
-	wl_pkt_filter_t		pkt_filter;
-	wl_pkt_filter_t		*pkt_filterp;
-	int						buf_len;
-	int						str_len;
-	uint32					mask_size;
-	uint32					pattern_size;
-	char buf[256];
-	int pkt_id = id;
-	dhd_pub_t *dhd = pdhd;
-	wl_pkt_filter_enable_t	enable_parm;
-
-	printk("Enter set packet filter\n");
-	if (!pdhd)
-		return -1;
-
-	/* disable pkt filter */
-	enable_parm.id = htod32(pkt_id);
-	enable_parm.enable = htod32(0);
-	bcm_mkiovar("pkt_filter_enable", (char *)&enable_parm,
-		sizeof(wl_pkt_filter_enable_t), buf, sizeof(buf));
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, buf, sizeof(buf));
-
-	/* delete it */
-	bcm_mkiovar("pkt_filter_delete", (char *)&pkt_id, 4, buf, sizeof(buf));
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, buf, sizeof(buf));
-
-	if (!add) {
-		return 0;
-	}
-
-	printk("start to add pkt filter %d\n", pkt_id);
-	memset(buf, 0, sizeof(buf));
-	/* add a packet filter pattern */
-	str = "pkt_filter_add";
-	str_len = strlen(str);
-	strncpy(buf, str, str_len);
-	buf[ str_len ] = '\0';
-	buf_len = str_len + 1;
-
-	pkt_filterp = (wl_pkt_filter_t *) (buf + str_len + 1);
-
-	/* Parse packet filter id. */
-	pkt_filter.id = htod32(pkt_id);
-
-	/* Parse filter polarity. */
-	pkt_filter.negate_match = htod32(0);
-
-	/* Parse filter type. */
-	pkt_filter.type = htod32(0);
-
-	/* Parse pattern filter offset. */
-	pkt_filter.u.pattern.offset = htod32(offset);
-
-	/* Parse pattern filter mask. */
-	mask_size =	htod32(wl_pattern_atoh(mask,
-		(char *) pkt_filterp->u.pattern.mask_and_pattern));
-
-	/* Parse pattern filter pattern. */
-	pattern_size = htod32(wl_pattern_atoh(pattern,
-		(char *) &pkt_filterp->u.pattern.mask_and_pattern[mask_size]));
-
-	if (mask_size != pattern_size) {
-		printk("Mask and pattern not the same size\n");
-		return -EINVAL;
-	}
-
-	pkt_filter.u.pattern.size_bytes = mask_size;
-	buf_len += WL_PKT_FILTER_FIXED_LEN;
-	buf_len += (WL_PKT_FILTER_PATTERN_FIXED_LEN + 2 * mask_size);
-
-	memcpy((char *)pkt_filterp, &pkt_filter,
-		WL_PKT_FILTER_FIXED_LEN + WL_PKT_FILTER_PATTERN_FIXED_LEN);
-
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, buf, buf_len);
-
-	enable_parm.id = htod32(pkt_id);
-	enable_parm.enable = htod32(1);
-	bcm_mkiovar("pkt_filter_enable", (char *)&enable_parm,
-		sizeof(wl_pkt_filter_enable_t), buf, sizeof(buf));
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, buf, sizeof(buf));
-
-	return 0;
-}
-
-int
-dhd_preinit_ioctls(dhd_pub_t *dhd)
-{
-	char eventmask[WL_EVENTING_MASK_LEN];
-	char iovbuf[WL_EVENTING_MASK_LEN + 12];	/*  Room for "event_msgs" + '\0' + bitvec  */
-	int ret;
-	uint up = 0;
-#ifdef CUSTOMER_HW2
-	uint roamvar = 0;
-#else
-	uint roamvar = 1;
-#endif
-	uint power_mode = PM_FAST;
-	uint32 dongle_align = DHD_SDALIGN;
-	uint32 glom = 0;
-
-	uint32 nmode = 0;
-	uint bcn_timeout = 5;
-/* Disable ARP off-load first
- */
-#if 0
-	int arpoe = 1;
-	int arp_ol = 0xf;
-#endif
-
-	int scan_assoc_time = 40;
-	int scan_unassoc_time = 80;
-	char 				*str;
-//	wl_pkt_filter_t		pkt_filter;
-//	wl_pkt_filter_t		*pkt_filterp;
-	int						buf_len;
-	int						str_len;
-//	uint32					mask_size;
-//	uint32					pattern_size;
-	char buf[256];
-	char mac_buf[16];
-	uint filter_mode = 1;
-	wl_keep_alive_pkt_t keep_alive_pkt;
-	wl_keep_alive_pkt_t *keep_alive_pktp;
-	pdhd = dhd;
-
-
-	dhd_os_proto_block(dhd);
-#ifdef WLAN_PFN
-	/* init pfn data */
-	memset(&pfn_ssid_set, 0, sizeof(pfn_ssid_set_t));
-#endif
-	/* Get the device MAC address */
-	strcpy(iovbuf, "cur_etheraddr");
-	if ((ret = dhdcdc_query_ioctl(dhd, 0, WLC_GET_VAR, iovbuf, sizeof(iovbuf))) < 0) {
-		DHD_ERROR(("%s: can't get MAC address , error=%d\n", __FUNCTION__, ret));
-		dhd_os_proto_unblock(dhd);
-		return -BCME_NOTUP;
-	}
-	memcpy(dhd->mac.octet, iovbuf, ETHER_ADDR_LEN);
-
-	/* Set Country code */
-	if (dhd->country_code[0] != 0) {
-		if (dhdcdc_set_ioctl(dhd, 0, WLC_SET_COUNTRY,
-			dhd->country_code, sizeof(dhd->country_code)) < 0) {
-			DHD_ERROR(("%s: country code setting failed\n", __FUNCTION__));
-		}
-	}
-
-	/* Set PowerSave mode */
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM, (char *)&power_mode, sizeof(power_mode));
-
-	/* Match Host and Dongle rx alignment */
-	bcm_mkiovar("bus:txglomalign", (char *)&dongle_align, 4, iovbuf, sizeof(iovbuf));
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-
-	/* disable glom option per default */
-	bcm_mkiovar("bus:txglom", (char *)&glom, 4, iovbuf, sizeof(iovbuf));
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-	/* Setup timeout if Beacons are lost and roam is off to report link down */
-	/* if (roamvar) */ {
-		bcm_mkiovar("bcn_timeout", (char *)&bcn_timeout, 4, iovbuf, sizeof(iovbuf));
-		dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-	}
-
-	/* Enable/Disable build-in roaming to allowed ext supplicant to take of romaing */
-	bcm_mkiovar("roam_off", (char *)&roamvar, 4, iovbuf, sizeof(iovbuf));
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-
-	/* Disable nmode as default */
-	bcm_mkiovar("nmode", (char *)&nmode, 4, iovbuf, sizeof(iovbuf));
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-
-	/* Force STA UP */
-	dhdcdc_set_ioctl(dhd, 0, WLC_UP, (char *)&up, sizeof(up));
-
-	/* Setup event_msgs */
-	bcm_mkiovar("event_msgs", eventmask, WL_EVENTING_MASK_LEN, iovbuf, sizeof(iovbuf));
-	dhdcdc_query_ioctl(dhd, 0, WLC_GET_VAR, iovbuf, sizeof(iovbuf));
-	bcopy(iovbuf, eventmask, WL_EVENTING_MASK_LEN);
-
-	setbit(eventmask, WLC_E_SET_SSID);
-	setbit(eventmask, WLC_E_PRUNE);
-	setbit(eventmask, WLC_E_AUTH);
-	setbit(eventmask, WLC_E_REASSOC);
-	setbit(eventmask, WLC_E_REASSOC_IND);
-	setbit(eventmask, WLC_E_DEAUTH_IND);
-	setbit(eventmask, WLC_E_DISASSOC_IND);
-	setbit(eventmask, WLC_E_DISASSOC);
-	setbit(eventmask, WLC_E_JOIN);
-	setbit(eventmask, WLC_E_ASSOC_IND);
-	setbit(eventmask, WLC_E_PSK_SUP);
-	setbit(eventmask, WLC_E_LINK);
-	setbit(eventmask, WLC_E_NDIS_LINK);
-	setbit(eventmask, WLC_E_MIC_ERROR);
-	setbit(eventmask, WLC_E_PMKID_CACHE);
-	setbit(eventmask, WLC_E_TXFAIL);
-	setbit(eventmask, WLC_E_JOIN_START);
-	setbit(eventmask, WLC_E_SCAN_COMPLETE);
-#ifdef WLAN_PFN
-	setbit(eventmask, WLC_E_PFN_NET_FOUND);
-#endif
-
-	bcm_mkiovar("event_msgs", eventmask, WL_EVENTING_MASK_LEN, iovbuf, sizeof(iovbuf));
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_SCAN_CHANNEL_TIME, (char *)&scan_assoc_time,
-		sizeof(scan_assoc_time));
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_SCAN_UNASSOC_TIME, (char *)&scan_unassoc_time,
-		sizeof(scan_unassoc_time));
-
-#if 0
-	/* Set ARP offload */
-	bcm_mkiovar("arpoe", (char *)&arpoe, 4, iovbuf, sizeof(iovbuf));
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-	bcm_mkiovar("arp_ol", (char *)&arp_ol, 4, iovbuf, sizeof(iovbuf));
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-#endif
-
-#if 0
-	/* add a default packet filter pattern */
-	str = "pkt_filter_add";
-	str_len = strlen(str);
-	strncpy(buf, str, str_len);
-	buf[ str_len ] = '\0';
-	buf_len = str_len + 1;
-
-	pkt_filterp = (wl_pkt_filter_t *) (buf + str_len + 1);
-
-	/* Parse packet filter id. */
-	pkt_filter.id = htod32(100);
-
-	/* Parse filter polarity. */
-	pkt_filter.negate_match = htod32(0);
-
-	/* Parse filter type. */
-	pkt_filter.type = htod32(0);
-
-	/* Parse pattern filter offset. */
-	pkt_filter.u.pattern.offset = htod32(0);
-
-	/* Parse pattern filter mask. */
-	mask_size =	htod32(wl_pattern_atoh("0xff",
-		(char *) pkt_filterp->u.pattern.mask_and_pattern));
-
-	/* Parse pattern filter pattern. */
-	pattern_size = htod32(wl_pattern_atoh("0x00",
-		(char *) &pkt_filterp->u.pattern.mask_and_pattern[mask_size]));
-
-	if (mask_size != pattern_size) {
-		printk("Mask and pattern not the same size\n");
-		dhd_os_proto_unblock(dhd);
-		return -EINVAL;
-	}
-
-	pkt_filter.u.pattern.size_bytes = mask_size;
-	buf_len += WL_PKT_FILTER_FIXED_LEN;
-	buf_len += (WL_PKT_FILTER_PATTERN_FIXED_LEN + 2 * mask_size);
-
-	/* Keep-alive attributes are set in local	variable (keep_alive_pkt), and
-	** then memcpy'ed into buffer (keep_alive_pktp) since there is no
-	** guarantee that the buffer is properly aligned.
-	*/
-	memcpy((char *)pkt_filterp, &pkt_filter,
-		WL_PKT_FILTER_FIXED_LEN + WL_PKT_FILTER_PATTERN_FIXED_LEN);
-
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, buf, buf_len);
-#endif
-	/* put mac address in */
-	sprintf( mac_buf, "0x%02x%02x%02x%02x%02x%02x",
-	dhd->mac.octet[0], dhd->mac.octet[1], dhd->mac.octet[2],
-	dhd->mac.octet[3], dhd->mac.octet[4], dhd->mac.octet[5]
-	);
-
-	/* add a default packet filter pattern */
-	dhd_set_pktfilter(1, ALLOW_UNICAST, 0, "0xffffffffffff", mac_buf);
-
-	/* set mode to allow pattern */
-	bcm_mkiovar("pkt_filter_mode", (char *)&filter_mode, 4, iovbuf, sizeof(iovbuf));
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-
-	{ /* set roaming parameters */
-	int roam_scan_period = 30;
-	int roam_trigger = -80;
-	int roam_delta = 10;
-
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_ROAM_SCAN_PERIOD, (char *)&roam_scan_period, sizeof(roam_scan_period));
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_ROAM_DELTA, (char *)&roam_delta, sizeof(roam_delta));
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_ROAM_TRIGGER, (char *)&roam_trigger, sizeof(roam_trigger));
-	}
-
-	/* Set keep-alive attributes */
-
-	str = "keep_alive";
-	str_len = strlen(str);
-	strncpy(buf, str, str_len);
-	buf[str_len] = '\0';
-	buf_len = str_len + 1;
-
-	keep_alive_pktp = (wl_keep_alive_pkt_t *) (buf + str_len + 1);
-	keep_alive_pkt.period_msec = htod32(60000); // 1 min
-
-	/* packet content */
-	str = "0x0011223344550011223344550800450000000000000000000000000000000000000000000000000000000000";
-
-	/* put mac address in */
-	sprintf( mac_buf, "%02x%02x%02x%02x%02x%02x",
-	dhd->mac.octet[0], dhd->mac.octet[1], dhd->mac.octet[2],
-	dhd->mac.octet[3], dhd->mac.octet[4], dhd->mac.octet[5]
-	);
-	memcpy( str+14, mac_buf, ETHER_ADDR_LEN*2);
-
-	printk("%s:str=%s\n", __FUNCTION__, str);
-
-	keep_alive_pkt.len_bytes = htod16(wl_pattern_atoh(str, (char*)keep_alive_pktp->data));
-
-	buf_len += (WL_KEEP_ALIVE_FIXED_LEN + keep_alive_pkt.len_bytes);
-
-	/* Keep-alive attributes are set in local variable (keep_alive_pkt), and
-	* then memcpy'ed into buffer (keep_alive_pktp) since there is no
-	* guarantee that the buffer is properly aligned.
-	*/
-	memcpy((char*)keep_alive_pktp, &keep_alive_pkt, WL_KEEP_ALIVE_FIXED_LEN);
-
-	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, buf, buf_len);
-
-	dhd_os_proto_unblock(dhd);
-	return 0;
-}
 
 int
 dhd_prot_init(dhd_pub_t *dhd)
 {
 	int ret = 0;
+	char buf[128];
+
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
 
+	dhd_os_proto_block(dhd);
 
+	/* Get the device MAC address */
+	strcpy(buf, "cur_etheraddr");
+	ret = dhdcdc_query_ioctl(dhd, 0, WLC_GET_VAR, buf, sizeof(buf));
+	if (ret < 0) {
+		dhd_os_proto_unblock(dhd);
+		return ret;
+	}
+	memcpy(dhd->mac.octet, buf, ETHER_ADDR_LEN);
+
+	dhd_os_proto_unblock(dhd);
+
+#ifdef EMBEDDED_PLATFORM
 	ret = dhd_preinit_ioctls(dhd);
+#endif /* EMBEDDED_PLATFORM */
 
 	/* Always assumes wl for now */
 	dhd->iswl = TRUE;

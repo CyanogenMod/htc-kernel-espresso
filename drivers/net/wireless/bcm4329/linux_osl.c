@@ -1,7 +1,7 @@
 /*
  * Linux OS Independent Layer
  *
- * Copyright (C) 1999-2009, Broadcom Corporation
+ * Copyright (C) 1999-2010, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: linux_osl.c,v 1.125.12.3.8.5 2009/10/27 04:43:04 Exp $
+ * $Id: linux_osl.c,v 1.125.12.3.8.7 2010/05/04 21:10:04 Exp $
  */
 
 
@@ -81,7 +81,7 @@ struct osl_info {
 	bcm_mem_link_t *dbgmem_list;
 };
 
-static int16 linuxbcmerrormap[] =  \
+static int16 linuxbcmerrormap[] =
 {	0, 			
 	-EINVAL,		
 	-EINVAL,		
@@ -120,13 +120,16 @@ static int16 linuxbcmerrormap[] =  \
 	-EIO,			
 	-ENODEV,		
 	-EINVAL,		
-	-EINVAL			
+	-EIO,			
+	-EIO,			
+	-EINVAL,		
+	-EINVAL,		
 
 
 
-#if BCME_LAST != -38
+#if BCME_LAST != -41
 #error "You need to add a OS error translation in the linuxbcmerrormap \
-	for new error code defined in bcmuitls.h"
+	for new error code defined in bcmutils.h"
 #endif 
 };
 
@@ -508,7 +511,7 @@ osl_mfree(osl_t *osh, void *addr, uint size)
 #ifdef DHD_USE_STATIC_BUF
 	if (bcm_static_buf)
 	{
-		if ((addr > (void *)bcm_static_buf) && ((unsigned char *)addr \
+		if ((addr > (void *)bcm_static_buf) && ((unsigned char *)addr
 			<= ((unsigned char *)bcm_static_buf + STATIC_BUF_TOTAL_LEN)))
 		{
 			int buf_idx = 0;

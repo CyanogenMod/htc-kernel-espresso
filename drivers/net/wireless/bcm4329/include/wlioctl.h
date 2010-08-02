@@ -4,7 +4,7 @@
  *
  * Definitions subject to change without notice.
  *
- * Copyright (C) 1999-2009, Broadcom Corporation
+ * Copyright (C) 1999-2010, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -24,7 +24,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wlioctl.h,v 1.601.4.15.2.14.2.53 2009/10/27 06:18:20 Exp $
+ * $Id: wlioctl.h,v 1.601.4.15.2.14.2.61 2010/05/04 20:26:25 Exp $
  */
 
 
@@ -186,6 +186,7 @@ typedef struct wl_scan_results {
 #define WL_SCAN_RESULTS_PARTIAL	1
 #define WL_SCAN_RESULTS_PENDING	2
 #define WL_SCAN_RESULTS_ABORTED	3
+#define WL_SCAN_RESULTS_NO_MEM	4
 
 #define ESCAN_REQ_VERSION 1
 
@@ -287,6 +288,7 @@ typedef enum sup_auth_status {
 #define CRYPTO_ALGO_AES_OCB_MSDU	5
 #define CRYPTO_ALGO_AES_OCB_MPDU	6
 #define CRYPTO_ALGO_NALG		7
+#define CRYPTO_ALGO_SMS4		11
 
 #define WSEC_GEN_MIC_ERROR	0x0001
 #define WSEC_GEN_REPLAY		0x0002
@@ -337,6 +339,7 @@ typedef struct {
 #define AES_ENABLED		0x0004
 #define WSEC_SWFLAG		0x0008
 #define SES_OW_ENABLED		0x0040	
+#define SMS4_ENABLED		0x0100
 
 
 #define WPA_AUTH_DISABLED	0x0000	
@@ -348,6 +351,7 @@ typedef struct {
 #define WPA2_AUTH_PSK		0x0080	
 #define BRCM_AUTH_PSK           0x0100  
 #define BRCM_AUTH_DPT		0x0200	
+#define WPA_AUTH_WAPI		0x0400	
 
 #define WPA_AUTH_PFN_ANY	0xffffffff	
 
@@ -1327,7 +1331,7 @@ typedef struct wl_pfn {
 	int32			bss_type;		
 	int32			infra;			
 	int32			auth;			
-	int32			wpa_auth;		
+	uint32			wpa_auth;		
 	int32			wsec;			
 #ifdef WLPFN_AUTO_CONNECT
 	union {
@@ -1598,6 +1602,12 @@ typedef struct wl_obss_scan_arg {
 #define	WL_COEX_40MHZ_INTOLERANT	0x02
 #define	WL_COEX_WIDTH20			0x04
 
+typedef struct wl_action_obss_coex_req {
+	uint8 info;
+	uint8 num;
+	uint8 ch_list[1];
+} wl_action_obss_coex_req_t;
+
 
 #define MAX_RSSI_LEVELS 8
 
@@ -1611,6 +1621,39 @@ typedef struct wl_rssi_event {
 	int8 rssi_levels[MAX_RSSI_LEVELS];
 } wl_rssi_event_t;
 
+
+
+#define WLFEATURE_DISABLE_11N		0x00000001
+#define WLFEATURE_DISABLE_11N_STBC_TX	0x00000002
+#define WLFEATURE_DISABLE_11N_STBC_RX	0x00000004
+#define WLFEATURE_DISABLE_11N_SGI_TX	0x00000008
+#define WLFEATURE_DISABLE_11N_SGI_RX	0x00000010
+#define WLFEATURE_DISABLE_11N_AMPDU_TX	0x00000020
+#define WLFEATURE_DISABLE_11N_AMPDU_RX	0x00000040
+#define WLFEATURE_DISABLE_11N_GF	0x00000080
+
+
+
+#include <packed_section_end.h>
+
+
+#include <packed_section_start.h>
+
+
+typedef BWL_PRE_PACKED_STRUCT struct sta_prbreq_wps_ie_hdr {
+	struct ether_addr staAddr;
+	uint16 ieLen;
+} BWL_POST_PACKED_STRUCT sta_prbreq_wps_ie_hdr_t;
+
+typedef BWL_PRE_PACKED_STRUCT struct sta_prbreq_wps_ie_data {
+	sta_prbreq_wps_ie_hdr_t hdr;
+	uint8 ieData[1];
+} BWL_POST_PACKED_STRUCT sta_prbreq_wps_ie_data_t;
+
+typedef BWL_PRE_PACKED_STRUCT struct sta_prbreq_wps_ie_list {
+	uint32 totLen;
+	uint8 ieDataList[1];
+} BWL_POST_PACKED_STRUCT sta_prbreq_wps_ie_list_t;
 
 
 #include <packed_section_end.h>

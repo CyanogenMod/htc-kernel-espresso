@@ -1,7 +1,7 @@
 /*
  * BCMSDH Function Driver for the native SDIO/MMC driver in the Linux Kernel
  *
- * Copyright (C) 1999-2009, Broadcom Corporation
+ * Copyright (C) 1999-2010, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: bcmsdh_sdmmc.c,v 1.1.2.5.6.27 2009/10/28 19:42:29 Exp $
+ * $Id: bcmsdh_sdmmc.c,v 1.1.2.5.6.29 2010/03/19 17:16:08 Exp $
  */
 #include <typedefs.h>
 
@@ -211,26 +211,29 @@ sdioh_detach(osl_t *osh, sdioh_info_t *sd)
 }
 
 #if defined(OOB_INTR_ONLY) && defined(HW_OOB)
-#define _SDIO_CCCR_IENx		0x04	/* Function/Master Interrupt Enable */
 
 extern SDIOH_API_RC
-sdioh_enable_func_intr(uint32 func)
+sdioh_enable_func_intr(void)
 {
 	uint8 reg;
 	int err;
 
 	if (gInstance->func[0]) {
 		sdio_claim_host(gInstance->func[0]);
-		reg = sdio_readb(gInstance->func[0], _SDIO_CCCR_IENx, &err);
+
+		reg = sdio_readb(gInstance->func[0], SDIOD_CCCR_INTEN, &err);
 		if (err) {
 			sd_err(("%s: error for read SDIO_CCCR_IENx : 0x%x\n", __FUNCTION__, err));
 			sdio_release_host(gInstance->func[0]);
 			return SDIOH_API_RC_FAIL;
 		}
-		reg |= 1 << func;	/* enable function-x interrupt */
-		reg |= 1; /* Master interrupt enable */
-		sdio_writeb(gInstance->func[0], reg, _SDIO_CCCR_IENx, &err);
+
+		/* Enable F1 and F2 interrupts, set master enable */
+		reg |= (INTR_CTL_FUNC1_EN | INTR_CTL_FUNC2_EN | INTR_CTL_MASTER_EN);
+
+		sdio_writeb(gInstance->func[0], reg, SDIOD_CCCR_INTEN, &err);
 		sdio_release_host(gInstance->func[0]);
+
 		if (err) {
 			sd_err(("%s: error for write SDIO_CCCR_IENx : 0x%x\n", __FUNCTION__, err));
 			return SDIOH_API_RC_FAIL;
@@ -238,28 +241,29 @@ sdioh_enable_func_intr(uint32 func)
 	}
 
 	return SDIOH_API_RC_SUCCESS;
-
 }
 
 extern SDIOH_API_RC
-sdioh_disable_func_intr(uint32 func)
+sdioh_disable_func_intr(void)
 {
 	uint8 reg;
 	int err;
 
 	if (gInstance->func[0]) {
 		sdio_claim_host(gInstance->func[0]);
-		reg = sdio_readb(gInstance->func[0], _SDIO_CCCR_IENx, &err);
+		reg = sdio_readb(gInstance->func[0], SDIOD_CCCR_INTEN, &err);
 		if (err) {
 			sd_err(("%s: error for read SDIO_CCCR_IENx : 0x%x\n", __FUNCTION__, err));
 			sdio_release_host(gInstance->func[0]);
 			return SDIOH_API_RC_FAIL;
 		}
-		reg &= ~(1 << func);
+
+		reg &= ~(INTR_CTL_FUNC1_EN | INTR_CTL_FUNC2_EN);
 		/* Disable master interrupt with the last function interrupt */
 		if (!(reg & 0xFE))
 			reg = 0;
-		sdio_writeb(gInstance->func[0], reg, _SDIO_CCCR_IENx, &err);
+		sdio_writeb(gInstance->func[0], reg, SDIOD_CCCR_INTEN, &err);
+
 		sdio_release_host(gInstance->func[0]);
 		if (err) {
 			sd_err(("%s: error for write SDIO_CCCR_IENx : 0x%x\n", __FUNCTION__, err));
@@ -267,7 +271,6 @@ sdioh_disable_func_intr(uint32 func)
 		}
 	}
 	return SDIOH_API_RC_SUCCESS;
-
 }
 #endif /* defined(OOB_INTR_ONLY) && defined(HW_OOB) */
 
@@ -298,7 +301,7 @@ sdioh_interrupt_register(sdioh_info_t *sd, sdioh_cb_fn_t fn, void *argh)
 		sdio_release_host(gInstance->func[1]);
 	}
 #elif defined(HW_OOB)
-	sdioh_enable_func_intr(2);
+	sdioh_enable_func_intr();
 #endif /* defined(OOB_INTR_ONLY) */
 	return SDIOH_API_RC_SUCCESS;
 }
@@ -328,7 +331,7 @@ sdioh_interrupt_deregister(sdioh_info_t *sd)
 	sd->intr_handler = NULL;
 	sd->intr_handler_arg = NULL;
 #elif defined(HW_OOB)
-	sdioh_disable_func_intr(2);
+	sdioh_disable_func_intr();
 #endif /*  !defined(OOB_INTR_ONLY) */
 	return SDIOH_API_RC_SUCCESS;
 }
@@ -678,7 +681,6 @@ sdioh_enable_hw_oob_intr(sdioh_info_t *sd, bool enable)
 }
 #endif /* defined(OOB_INTR_ONLY) && defined(HW_OOB) */
 
-
 extern SDIOH_API_RC
 sdioh_cfg_read(sdioh_info_t *sd, uint fnc_num, uint32 addr, uint8 *data)
 {
@@ -794,8 +796,7 @@ sdioh_request_byte(sdioh_info_t *sd, uint rw, uint func, uint regaddr, uint8 *by
 				* depending upon MMC driver change.
 				* As of this time, this is temporaray one
 				*/
-				sdio_f0_writeb(gInstance->func[func], *byte,
-					regaddr, &err_ret);
+				sdio_writeb(gInstance->func[func], *byte, regaddr, &err_ret);
 				sdio_release_host(gInstance->func[func]);
 			}
 #endif /* MMC_SDIO_ABORT */
@@ -1260,7 +1261,7 @@ sdioh_start(sdioh_info_t *si, int stage)
 			sdio_release_host(gInstance->func[0]);
 #else /* defined(OOB_INTR_ONLY) */
 #if defined(HW_OOB)
-			sdioh_enable_func_intr(2);
+			sdioh_enable_func_intr();
 #endif
 			bcmsdh_oob_intr_set(TRUE);
 #endif /* !defined(OOB_INTR_ONLY) */
@@ -1289,7 +1290,7 @@ sdioh_stop(sdioh_info_t *si)
 		sdio_release_host(gInstance->func[0]);
 #else /* defined(OOB_INTR_ONLY) */
 #if defined(HW_OOB)
-		sdioh_disable_func_intr(2);
+		sdioh_disable_func_intr();
 #endif
 		bcmsdh_oob_intr_set(FALSE);
 #endif /* !defined(OOB_INTR_ONLY) */
