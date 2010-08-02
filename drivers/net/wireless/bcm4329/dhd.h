@@ -416,27 +416,4 @@ extern char nv_path[MOD_PARAM_PATHLEN];
 extern void dhd_wait_for_event(dhd_pub_t *dhd, bool *lockvar);
 extern void dhd_wait_event_wakeup(dhd_pub_t*dhd);
 
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/dhd.h
-#ifdef WLAN_PFN
-#define MAX_PFN_NUMBER	2
-#define PFN_SCAN_FREQ	60 /* in secs */
-#define PFN_WAKE_TIME	20000	/* in mini secs */
-int dhd_set_pfn_ssid(char * ssid, int ssid_len);
-int dhd_del_pfn_ssid(char * ssid, int ssid_len);
-#endif
-
-
-/* Packet Filter */
-enum pkt_filter_id {
-	ALLOW_UNICAST = 100,
-	ALLOW_ARP,
-	ALLOW_DHCP,
-	ALLOW_IPV4_MULTICAST,
-	ALLOW_IPV6_MULTICAST,
-};
-int dhd_set_pktfilter(int add, int id, int offset, char *mask, char *pattern);
-
-
-=======
->>>>>>> master:drivers/net/wireless/bcm4329/dhd.h
 #endif /* _dhd_h_ */

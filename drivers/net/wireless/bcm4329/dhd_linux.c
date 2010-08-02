@@ -84,14 +84,6 @@ int wifi_get_irq_number(unsigned long *irq_flags_ptr)
 #endif
 }
 
-int wifi_get_dot11n_enable(void)
-{
-        if (wifi_control_data && wifi_control_data->dot11n_enable) {
-                return wifi_control_data->dot11n_enable;
-        }
-        return 0;
-}
-
 int wifi_set_carddetect(int on)
 {
 	printk("%s = %d\n", __FUNCTION__, on);

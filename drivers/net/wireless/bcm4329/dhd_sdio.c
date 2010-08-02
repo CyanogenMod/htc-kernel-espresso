@@ -1425,14 +1425,10 @@ enum {
 	IOV_IDLECLOCK,
 	IOV_SD1IDLE,
 	IOV_SLEEP,
-	IOV_ACTIVE_TIME,
-	IOV_ACTIVE_TRIG,
 	IOV_VARS
 };
 
 const bcm_iovar_t dhdsdio_iovars[] = {
-	{"acttime",	IOV_ACTIVE_TIME,	0,	IOVT_INT32,	0 },
-	{"acttrig",	IOV_ACTIVE_TRIG,	0,	IOVT_INT32,	0 },
 	{"intr",	IOV_INTR,	0,	IOVT_BOOL,	0 },
 	{"sleep",	IOV_SLEEP,	0,	IOVT_BOOL,	0 },
 	{"pollrate",	IOV_POLLRATE,	0,	IOVT_UINT32,	0 },
@@ -2020,11 +2016,6 @@ err:
 	return bcmerror;
 }
 
-void wl_iw_set_active_level(int level);
-void wl_iw_set_active_period(int period);
-int wl_iw_get_active_level(void);
-int wl_iw_get_active_period(void);
-
 static int
 dhdsdio_doiovar(dhd_bus_t *bus, const bcm_iovar_t *vi, uint32 actionid, const char *name,
                 void *params, int plen, void *arg, int len, int val_size)
@@ -2100,32 +2091,6 @@ dhdsdio_doiovar(dhd_bus_t *bus, const bcm_iovar_t *vi, uint32 actionid, const ch
 	case IOV_SVAL(IOV_POLLRATE):
 		bus->pollrate = (uint)int_val;
 		bus->poll = (bus->pollrate != 0);
-		break;
-
-	case IOV_GVAL(IOV_ACTIVE_TIME):
-		int_val = wl_iw_get_active_period()/1000;
-		bcopy(&int_val, arg, val_size);
-		break;
-
-	case IOV_SVAL(IOV_ACTIVE_TIME):
-		if (int_val < 0) {
-			bcmerror = BCME_BADARG;
-		} else {
-			wl_iw_set_active_period(int_val*1000);
-		}
-		break;
-
-	case IOV_GVAL(IOV_ACTIVE_TRIG):
-		int_val = wl_iw_get_active_level();
-		bcopy(&int_val, arg, val_size);
-		break;
-
-	case IOV_SVAL(IOV_ACTIVE_TRIG):
-		if (int_val >= 0) {
-			bcmerror = BCME_BADARG;
-		} else {
-			wl_iw_set_active_level(int_val);
-		}
 		break;
 
 	case IOV_GVAL(IOV_IDLETIME):
@@ -4729,6 +4694,8 @@ dhd_bus_watchdog(dhd_pub_t *dhdp)
 			bus->idlecount = 0;
 			if (bus->activity) {
 				bus->activity = FALSE;
+				dhd_os_wd_timer(bus->dhd,dhd_watchdog_ms);
+			} else {
 				dhdsdio_clkctl(bus, CLK_NONE, FALSE);
 			}
 		}

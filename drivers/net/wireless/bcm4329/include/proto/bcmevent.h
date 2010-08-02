@@ -126,7 +126,6 @@ typedef BWL_PRE_PACKED_STRUCT struct bcm_event {
 #define WLC_E_MULTICAST_DECODE_ERROR 51 
 #define WLC_E_TRACE 52
 #define WLC_E_IF		54	
-#define WLC_E_ASSOCREQ_IE	55	/* penguin, Send up assoc ie */
 #define WLC_E_RSSI		56	
 #define WLC_E_PFN_SCAN_COMPLETE	57	
 #define WLC_E_ACTION_FRAME      58      

@@ -48,11 +48,7 @@ typedef const struct si_pub  si_t;
 #include <proto/ethernet.h>
 #include <dngl_stats.h>
 #include <dhd.h>
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-#define WL_ERROR(x) printk x
-=======
 #define WL_ERROR(x) printf x
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 #define WL_TRACE(x)
 #define WL_ASSOC(x)
 #define WL_INFORM(x)
@@ -107,14 +103,6 @@ static int wl_iw_set_ap_security(struct net_device *dev, struct ap_profile *ap);
 static int wl_iw_softap_deassoc_stations(struct net_device *dev);
 #endif
 
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-#ifdef WLAN_AUTO_RSSI
-static int old_rssi_level = WL_IW_RSSI_MINVAL;
-static int old_rssi = 0;
-#endif
-
-=======
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 #define WL_IW_IOCTL_CALL(func_call) \
 	do {				\
 		func_call;		\
@@ -166,26 +154,8 @@ extern int dhd_wait_pend8021x(struct net_device *dev);
 #endif 
 
 static void *g_scan = NULL;
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-static uint g_scan_specified_ssid;
-#ifdef WLAN_PFN
-//static char pfn_ssid[32] = {0};
-//static int pfn_ssid_len = 0;
-//static int pfn_scan = 0;
-struct timer_list *pfn_lock_timer = NULL;
-#endif
-static int wl_active_expired = 0;
-struct timer_list *wl_active_timer = NULL;
-static int screen_off = 0;
-#ifdef WLAN_PROTECT
-static int wl_iw_busdown = 0;
-static int wl_iw_recover = 0;
-#endif
-static int iw_link_state = 0;
-=======
 static volatile uint g_scan_specified_ssid;	
 static wlc_ssid_t g_specific_ssid;		
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 
 static wlc_ssid_t g_ssid;
 
@@ -248,7 +218,6 @@ typedef struct iscan_info {
 #define COEX_DHCP 1 
 static void wl_iw_bt_flag_set(struct net_device *dev, bool set);
 static void wl_iw_bt_release(void);
-static int wl_iw_fixed_scan(struct net_device *dev);
 
 typedef enum bt_coex_status {
 	BT_DHCP_IDLE = 0,
@@ -382,91 +351,11 @@ dev_wlc_ioctl(
 		WL_TRACE(("%s: call after driver stop : ignored\n", __FUNCTION__));
 	}
 
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-static void wl_iw_act_time_expire(void)
-{
-	struct timer_list **timer;
-	timer = &wl_active_timer;
-
-	if (*timer) {
-		WL_TRACE(("ac timer expired\n"));
-		del_timer_sync(*timer);
-		kfree(*timer);
-		*timer = NULL;
-		if (screen_off)
-			return;
-		wl_active_expired = 1;
-	}
-	return;
-}
-
-static void wl_iw_deactive(void)
-{
-	struct timer_list **timer;
-	timer = &wl_active_timer;
-
-	if (*timer) {
-		WL_TRACE(("previous ac exist\n"));
-		del_timer_sync(*timer);
-		kfree(*timer);
-		*timer = NULL;
-	}
-	wl_active_expired = 0;
-	WL_TRACE(("wl_iw_deactive\n"));
-	return;
-}
-
-#ifdef WLAN_PFN
-static void wl_iw_pfn_set_unlock(void)
-{
-	struct timer_list **timer;
-	timer = &pfn_lock_timer;
-	if (*timer) {
-		del_timer_sync(*timer);
-		kfree(*timer);
-		*timer = NULL;
-	}
-	net_os_wake_unlock(priv_dev);
-=======
 	net_os_wake_unlock(dev);
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 
 	return ret;
 }
 
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-/* penguin add */
-static void wl_iw_set_pfn_timer(int enable)
-{
-	struct timer_list **timer;
-
-	timer = &pfn_lock_timer;
-
-	if (enable) {
-		if (*timer) {
-			wl_iw_pfn_set_unlock();
-		}
-		*timer = kmalloc(sizeof(struct timer_list), GFP_KERNEL);
-		if (!(*timer)) {
-			wl_iw_pfn_set_unlock();
-			return;
-		}
-		(*timer)->function = (void *)wl_iw_pfn_set_unlock;
-		init_timer(*timer);
-		(*timer)->expires = jiffies + PFN_WAKE_TIME * HZ / 1000;
-		add_timer(*timer);
-	}
-	else {
-		if (*timer) {
-			wl_iw_pfn_set_unlock();
-		}
-	}
-
-	return;
-}
-#endif
-=======
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 
 static int
 dev_wlc_intvar_get_reg(
@@ -712,44 +601,6 @@ wl_iw_get_macaddr(
 	return error;
 }
 
-#ifdef WLAN_PFN
-static int
-wl_iw_del_pfn(
-	struct net_device *dev,
-	struct iw_request_info *info,
-	union iwreq_data *wrqu,
-	char *extra
-)
-{
-	char ssid[33];
-	char *p = extra;
-	int ssid_offset;
-	int ssid_size;
-
-	WL_TRACE(("%s\n", __FUNCTION__));
-
-	memset(ssid, 0, sizeof(ssid));
-
-	ssid_offset = strcspn(extra, " ");
-	ssid_size = strlen(extra) - ssid_offset;
-
-	if (ssid_offset == 0) {
-		WL_ERROR(("%s, no ssid specified\n", __FUNCTION__));
-		return 0;
-	}
-
-	strncpy(ssid, extra + ssid_offset+1,
-			MIN(ssid_size, sizeof(ssid)));
-
-	WL_ERROR(("%s: remove ssid: %s\n", __FUNCTION__, ssid));
-	dhd_del_pfn_ssid(ssid, ssid_size);
-
-	p += snprintf(p, MAX_WX_STRING, "OK");
-	wrqu->data.length = p - extra + 1;
-
-	return 0;
-}
-#endif
 
 static int
 wl_iw_set_country(
@@ -793,42 +644,6 @@ exit:
 	return error;
 }
 
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-static int active_level = -80;
-static int active_period = 20000; //in mini secs
-
-void wl_iw_set_active_level(int level)
-{
-	active_level = level;
-	printk("set active level to %d\n", active_level);
-	return;
-}
-
-void wl_iw_set_active_period(int period)
-{
-	active_period = period;
-	printk("set active_period to %d\n", active_period);
-	return;
-}
-
-int wl_iw_get_active_level(void)
-{
-	return active_level;
-}
-
-int wl_iw_get_active_period(void)
-{
-	return active_period;
-}
-
-void wl_iw_set_screen_off(int off)
-{
-	screen_off = off;
-	if (screen_off)
-		wl_iw_deactive();
-
-	return;
-=======
 #ifdef CUSTOMER_HW2
 static int
 wl_iw_set_power_mode(
@@ -898,7 +713,6 @@ wl_iw_get_power_mode(
 	}
 	wrqu->data.length = p - extra + 1;
 	return error;
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 }
 
 static int
@@ -911,15 +725,8 @@ wl_iw_set_btcoex_dhcp(
 {
 	int error = 0;
 	char *p = extra;
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-	uint val;
-#ifdef  CUSTOMER_HW2
-	//wl_pkt_filter_enable_t	enable_parm;
-	int  pm = PM_FAST;
-=======
 #ifndef CUSTOMER_HW2
 	static int  pm = PM_FAST;
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 	int  pm_local = PM_OFF;
 #endif
 	char powermode_val = 0;
@@ -944,47 +751,13 @@ wl_iw_set_btcoex_dhcp(
 	strncpy((char *)&powermode_val, extra + strlen("POWERMODE") + 1, 1);
 #endif
 
-	/* set to normal pm mode if we set active previous */
-	wl_iw_deactive();
-	if (strnicmp((char *)&powermode_val, "6", strlen("6")) == 0) {
-		if (screen_off)
-			pm = PM_MAX;
-		dev_wlc_ioctl(dev, WLC_SET_PM, &pm, sizeof(pm));
-
-		if ((old_rssi < active_level)&&(!screen_off)) {
-			struct timer_list **timer;
-			timer = &wl_active_timer;
-
-			*timer = kmalloc(sizeof(struct timer_list), GFP_KERNEL);
-			if (*timer) {
-				(*timer)->function = (void *)wl_iw_act_time_expire;
-				init_timer(*timer);
-				(*timer)->expires = jiffies + active_period * HZ / 1000;
-				add_timer(*timer);
-				dev_wlc_ioctl(dev, WLC_SET_PM, &pm_local, sizeof(pm_local));
-			}
-		}
-	} else if (strnicmp((char *)&powermode_val, "1", strlen("1")) == 0) {
+	if (strnicmp((char *)&powermode_val, "1", strlen("1")) == 0) {
 
 		WL_TRACE(("%s: DHCP session starts\n", __FUNCTION__));
 
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-#ifdef  CUSTOMER_HW2
-
-		//dev_wlc_ioctl(dev, WLC_GET_PM, &pm, sizeof(pm));
-
-		dev_wlc_ioctl(dev, WLC_SET_PM, &pm_local, sizeof(pm_local));
-		/* disable packet filter */
-/*		enable_parm.id = htod32(100);
-		enable_parm.enable = htod32(0);
-		dev_wlc_bufvar_set(dev, "pkt_filter_enable", \
-				(char *)&enable_parm, sizeof(enable_parm));
-*/
-=======
 		if ((saved_status == FALSE) &&
 #ifndef CUSTOMER_HW2
 			(!dev_wlc_ioctl(dev, WLC_GET_PM, &pm, sizeof(pm))) &&
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 #endif
 			(!dev_wlc_intvar_get_reg(dev, "btc_params", 66,  &saved_reg66)) &&
 			(!dev_wlc_intvar_get_reg(dev, "btc_params", 41,  &saved_reg41)) &&
@@ -1030,14 +803,7 @@ wl_iw_set_btcoex_dhcp(
 #endif
 		WL_TRACE(("%s: DHCP session done\n", __FUNCTION__));
 
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-#ifdef  CUSTOMER_HW2
-
-		if (screen_off)
-			pm = PM_MAX;
-=======
 #ifndef CUSTOMER_HW2
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 		dev_wlc_ioctl(dev, WLC_SET_PM, &pm, sizeof(pm));
 #endif
 
@@ -1138,50 +904,6 @@ wl_iw_get_link_speed(
 	return error;
 }
 
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-#ifdef WLAN_AUTO_RSSI
-static void wl_iw_set_pm2_sleep_ret(struct net_device *dev, int rssi)
-{
-	int pm2_sleep_ret = 200, rssi_level;
-	char iovbuf[32];
-
-	if (rssi == 0)
-		rssi_level = WL_IW_RSSI_MINVAL;
-	if (rssi > WL_IW_RSSI_VERY_GOOD)
-		rssi_level = WL_IW_RSSI_VERY_GOOD;
-	else if (rssi > WL_IW_RSSI_LOW)
-		rssi_level = WL_IW_RSSI_LOW;
-	else if (rssi > WL_IW_RSSI_VERY_LOW)
-		rssi_level = WL_IW_RSSI_VERY_LOW;
-	else
-		rssi_level = WL_IW_RSSI_MINVAL;
-
-	if (rssi_level == old_rssi_level)
-		return;
-
-	old_rssi_level = rssi_level;
-
-	switch (rssi_level) {
-		case WL_IW_RSSI_VERY_GOOD:
-			pm2_sleep_ret = 20;
-			break;
-		case WL_IW_RSSI_LOW:
-			pm2_sleep_ret = 50;
-			break;
-		case WL_IW_RSSI_VERY_LOW:
-			pm2_sleep_ret = 100;
-			break;
-		default:
-			pm2_sleep_ret = 200;
-	}
-
-	dev_iw_iovar_setbuf(dev, "pm2_sleep_ret", &pm2_sleep_ret, 4, iovbuf, 32);
-
-	return;
-}
-#endif
-=======
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 
 static int
 wl_iw_get_band(
@@ -1205,33 +927,7 @@ wl_iw_get_band(
 		wrqu->data.length = p - extra + 1;
 	}
 
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-	g_ss_cache_ctrl.last_rssi = rssi;
-	/* if rssi is 0, it means we lost the connection */
-	if (rssi == 0)
-		rssi = WL_IW_RSSI_MINVAL;
-
-	wl_format_ssid(ssidbuf, ssid.SSID, dtoh32(ssid.SSID_len));
-	p += snprintf(p, MAX_WX_STRING, "%s rssi %d ", ssidbuf, rssi);
-	wrqu->data.length = p - extra + 1;
-
-	old_rssi = rssi;
-
-	if (wl_active_expired) {
-		int pm = PM_FAST;
-		wl_active_expired = 0;
-		if (screen_off)
-			pm = PM_MAX;
-
-		WL_TRACE(("set pm to %d\n", pm));
-		dev_wlc_ioctl(dev, WLC_SET_PM, &pm, sizeof(pm));
-	}
-#ifdef WLAN_AUTO_RSSI
-	wl_iw_set_pm2_sleep_ret(dev, rssi);
-#endif
-=======
 	net_os_wake_unlock(dev);
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 	return error;
 }
 
@@ -1392,24 +1088,10 @@ wl_iw_control_wl_off(
 	int ret = 0;
 	WL_TRACE(("Enter %s\n", __FUNCTION__));
 
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-	wl_iw_deactive();
-#ifdef WLAN_PFN
-	wl_iw_set_pfn_timer(0);
-#endif
-#ifdef WL_IW_USE_THREAD_WL_OFF
-	ctl.timer = &timer;
-	ctl.dev = dev;
-	sema_init(&ctl.timer_sem, 0);
-	init_completion(&ctl.sysioc_exited);
-
-	ctl.sysioc_pid = kernel_thread(_wl_control_sysioc_thread_wl_off, &ctl, 0);
-=======
 	if (!dev) {
 		WL_ERROR(("%s: dev is null\n", __FUNCTION__));
 		return -1;
 	}
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 
 	mutex_lock(&wl_start_lock);
 
@@ -2379,15 +2061,9 @@ wl_iw_get_aplist(
 		WL_ERROR(("%s : list->version %d != WL_BSS_INFO_VERSION\n", \
 			 __FUNCTION__, list->version));
 		kfree(list);
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-		wl_iw_fixed_scan(dev);
-		return -EINVAL;
-	}
-=======
 		return -EINVAL;
 	}
 
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 	for (i = 0, dwrq->length = 0; i < list->count && dwrq->length < IW_MAX_AP; i++) {
 		bi = bi ? (wl_bss_info_t *)((uintptr)bi + dtoh32(bi->length)) : list->bss_info;
 		ASSERT(((uintptr)bi + dtoh32(bi->length)) <= ((uintptr)list +
@@ -2458,10 +2134,6 @@ wl_iw_iscan_get_aplist(
 		if (list->version != WL_BSS_INFO_VERSION) {
 			WL_ERROR(("%s : list->version %d != WL_BSS_INFO_VERSION\n", \
 				__FUNCTION__, list->version));
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-			wl_iw_fixed_scan(dev);
-=======
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 			return -EINVAL;
 		}
 
@@ -2707,22 +2379,7 @@ _iscan_sysioc_thread(void *data)
 			iscan_pass_abort = FALSE;
 			status  = -1;
 		}
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-#if 0
-//#ifdef WLAN_PFN
-		else if (pfn_scan == 1) {
-			pfn_scan = 0;
-			g_scan_specified_ssid = 1;
-			strcpy(g_specific_ssid.SSID, pfn_ssid);
-			g_specific_ssid.SSID_len = pfn_ssid_len;
-			WL_ERROR(("pfn in iscan\n"));
-			wl_iw_force_specific_scan(iscan);
-			status  = -1;
-		}
-#endif
-=======
 
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 		switch (status) {
 			case WL_SCAN_RESULTS_PARTIAL:
 				WL_SCAN(("iscanresults incomplete\n"));
@@ -3162,11 +2819,7 @@ wl_iw_iscan_set_scan(
 {
 	wlc_ssid_t ssid;
 	iscan_info_t *iscan = g_iscan;
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-	int isup;
-=======
 	int ret = 0;
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 
 	WL_TRACE(("%s: SIOCSIWSCAN : ISCAN\n", dev->name));
 
@@ -3187,18 +2840,6 @@ wl_iw_iscan_set_scan(
 	if (g_onoff == G_WLAN_SET_OFF) {
 		WL_TRACE(("%s: driver is not up yet after START\n", __FUNCTION__));
 		goto set_scan_end;
-	}
-
-	/*check interface up */
-	if (dev_wlc_ioctl(dev, WLC_GET_UP, &isup, sizeof(isup)) != 0) {
-			WL_ERROR(("%s: can not isup\n", dev->name));
-			return 0;
-	}
-
-	if (!isup) {
-		WL_ERROR(("%s: not up\n", dev->name));
-		/* Reinit sta */
-		dhd_dev_init_ioctl(dev);
 	}
 
 	if ((!iscan) || (iscan->sysioc_pid < 0)) {
@@ -3427,11 +3068,7 @@ wl_iw_get_scan_prep(
 			WL_ERROR(("%s : list->version %d != WL_BSS_INFO_VERSION\n", \
 				__FUNCTION__, list->version));
 			return ret;
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-		}
-=======
 		 }
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 
 		bi = bi ? (wl_bss_info_t *)((uintptr)bi + dtoh32(bi->length)) : list->bss_info;
 
@@ -3535,7 +3172,7 @@ wl_iw_get_scan(
 	WL_TRACE(("%s: buflen_from_user %d: \n", dev->name, buflen_from_user));
 
 	if (!extra) {
-		WL_ERROR(("%s: wl_iw_get_scan return -EINVAL\n", dev->name));
+		WL_TRACE(("%s: wl_iw_get_scan return -EINVAL\n", dev->name));
 		return -EINVAL;
 	}
 
@@ -3596,11 +3233,7 @@ wl_iw_get_scan(
 		if (g_scan_specified_ssid) {
 			g_scan_specified_ssid = 0;
 			kfree(list);
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-		wl_iw_fixed_scan(dev);
-=======
 		}
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 		return -EINVAL;
 	}
 
@@ -3688,85 +3321,6 @@ wl_iw_get_scan(
 }
 
 #if defined(WL_IW_USE_ISCAN)
-
-#define WL_SCAN_PARAMS_FIXED_SIZE 64
-#define WL_SCAN_PARAMS_SSID_MAX 10
-
-static int
-wl_fixed_scan_prep(wl_scan_params_t *params, int *params_size)
-{
-	int err = 0;
-	int i;
-	char *p;
-
-	int nchan = 0;
-	int nssid = 0;
-	wlc_ssid_t ssids[WL_SCAN_PARAMS_SSID_MAX];
-
-	memcpy(&params->bssid, &ether_bcast, ETHER_ADDR_LEN);
-	params->bss_type = DOT11_BSSTYPE_ANY;
-	params->scan_type = 0;
-	params->nprobes = -1;
-	params->active_time = -1;
-	params->passive_time = -1;
-	params->home_time = -1;
-	params->channel_num = 0;
-	memset(ssids, 0, WL_SCAN_PARAMS_SSID_MAX * sizeof(wlc_ssid_t));
-
-	params->nprobes = htod32(params->nprobes);
-	params->active_time = htod32(params->active_time);
-	params->passive_time = htod32(params->passive_time);
-	params->home_time = htod32(params->home_time);
-
-	for (i = 0; i < nchan; i++) {
-		params->channel_list[i] = htodchanspec(params->channel_list[i]);
-	}
-
-	for (i = 0; i < nssid; i++) {
-		ssids[i].SSID_len = htod32(ssids[i].SSID_len);
-	}
-
-	/* For a single ssid, use the single fixed field */
-	if (nssid == 1) {
-		nssid = 0;
-		memcpy(&params->ssid, &ssids[0], sizeof(ssids[0]));
-	}
-
-	p = (char*)params->channel_list + nchan * sizeof(uint16);
-
-	params->channel_num = htod32((nssid << WL_SCAN_PARAMS_NSSID_SHIFT) |
-	                             (nchan & WL_SCAN_PARAMS_COUNT_MASK));
-	*params_size = p - (char*)params + nssid * sizeof(wlc_ssid_t);
-
-	return err;
-}
-
-
-static int
-wl_iw_fixed_scan(struct net_device *dev)
-{
-	int params_size = WL_SCAN_PARAMS_FIXED_SIZE + WL_NUMCHANNELS * sizeof(uint16);
-	wl_scan_params_t *params;
-	int err = 0;
-
-	printk("%s:\n", __func__);
-	params_size += WL_SCAN_PARAMS_SSID_MAX * sizeof(wlc_ssid_t);
-	params = (wl_scan_params_t*)kmalloc(params_size, GFP_KERNEL);
-	if (params == NULL) {
-		printk("Error allocating %d bytes for scan params\n", params_size);
-		return -1;
-	}
-	memset(params, 0, params_size);
-
-	err = wl_fixed_scan_prep(params, &params_size);
-
-	if (!err) {
-		err = dev_wlc_ioctl(dev, WLC_SCAN, params, params_size);
-	}
-
-	kfree(params);
-	return err;
-}
 static int
 wl_iw_iscan_get_scan(
 	struct net_device *dev,
@@ -3799,11 +3353,7 @@ wl_iw_iscan_get_scan(
 #endif
 
 	if (!extra) {
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-		WL_ERROR(("%s: SIOCGIWSCAN GET bad parameter\n", dev->name));
-=======
 		WL_TRACE(("%s: INVALID SIOCGIWSCAN GET bad parameter\n", dev->name));
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 		return -EINVAL;
 	}
 
@@ -3850,16 +3400,9 @@ wl_iw_iscan_get_scan(
 	    counter += list->count;
 
 	    if (list->version != WL_BSS_INFO_VERSION) {
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-			WL_ERROR(("list->version %d != WL_BSS_INFO_VERSION\n", list->version));
-			/* set a scan to correct the iscan error */
-			wl_iw_fixed_scan(dev);
-			return -EINVAL; /* if WL_BSS_INFO_VERSION is corrupted iscan results are garbage */
-=======
 		WL_ERROR(("%s : list->version %d != WL_BSS_INFO_VERSION\n",
 			 __FUNCTION__, list->version));
 		return -EINVAL;
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 	    }
 
 	    bi = NULL;
@@ -6645,10 +6188,6 @@ int wl_iw_process_private_ascii_cmd(
 			union iwreq_data *dwrq,
 			char *cmd_str)
 {
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-	//printk("%s: add: %d, id: %d, offset: %d, mask: %s, pattern: %s\n", __func__,
-	//	data->add, data->id, data->offset, data->mask, data->pattern);
-=======
 	int ret = 0;
 	char *sub_cmd = cmd_str + PROFILE_OFFSET + strlen("ASCII_CMD=");
 
@@ -6697,7 +6236,6 @@ int wl_iw_process_private_ascii_cmd(
 		}
 #endif
 	}
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 
 	return ret;
 }
@@ -6777,30 +6315,6 @@ static int wl_iw_set_priv(
 #else
 		else if (strnicmp(extra, "POWERMODE", strlen("POWERMODE")) == 0)
 			ret = wl_iw_set_btcoex_dhcp(dev, info, (union iwreq_data *)dwrq, extra);
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-#ifdef WLAN_PFN
-	    else if (strnicmp(extra, "PFN_REMOVE", strlen("PFN_REMOVE")) == 0)
-			ret = wl_iw_del_pfn(dev, info, (union iwreq_data *)dwrq, extra);
-#endif
-#ifdef CONFIG_BCM4329_SOFTAP
-	    else if (strnicmp(extra, "AP_TXPOWER_SET", strlen("AP_TXPOWER_SET")) == 0) {
-			WL_SOFTAP(("penguin, AP_TXPOWER_SET\n"));
-			wl_iw_settxpower(dev, (int *)(extra + PROFILE_OFFSET));
-	    }
-	    else if (strnicmp(extra, "AP_PROFILE_SET", strlen("AP_PROFILE_SET")) == 0) {
-			WL_SOFTAP(("penguin, get AP_PROFILE_SET\n"));
-			wl_iw_setap(dev, (struct ap_profile *)(extra + PROFILE_OFFSET));
-	    }
-		else if (strnicmp(extra, "AP_ASSOC_LIST_GET", strlen("AP_ASSOC_LIST_GET")) == 0) {
-			WL_SOFTAP(("penguin, get AP_ASSOC_LIST_GET\n"));
-			wl_iw_get_assoc_list(dev, extra, dwrq->length);
-	    }
-		else if (strnicmp(extra, "AP_MAC_LIST_SET", strlen("AP_MAC_LIST_SET")) == 0) {
-			WL_SOFTAP(("penguin, set AP_MAC_LIST_SET\n"));
-			wl_iw_set_mac_list(dev, (extra + PROFILE_OFFSET));
-	    }
-=======
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 #endif
 		else if (strnicmp(extra, "GETPOWER", strlen("GETPOWER")) == 0)
 			ret = wl_iw_get_power_mode(dev, info, (union iwreq_data *)dwrq, extra);
@@ -7397,7 +6911,6 @@ wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data)
 	case WLC_E_LINK:
 	case WLC_E_NDIS_LINK:
 		cmd = SIOCGIWAP;
-		WL_TRACE(("Link event\n"));
 		if (!(flags & WLC_EVENT_MSG_LINK)) {
 #ifdef SOFTAP
 #ifdef AP_ONLY
@@ -7410,17 +6923,11 @@ wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data)
 			} else {
 				WL_TRACE(("STA_Link Down\n"));
 				g_ss_cache_ctrl.m_link_down = 1;
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-
-			WL_ERROR(("Link Down\n"));
-			iw_link_state = 0;
-=======
 			}
 #else
 			g_ss_cache_ctrl.m_link_down = 1;
 #endif
 			WL_TRACE(("Link Down\n"));
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 
 			bzero(wrqu.addr.sa_data, ETHER_ADDR_LEN);
 			bzero(&extra, ETHER_ADDR_LEN);
@@ -7443,12 +6950,7 @@ wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data)
 				WL_TRACE(("STA_LINK_UP\n"));
 			}
 #endif
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-			WL_ERROR(("Link UP\n"));
-			iw_link_state = 1;
-=======
 			WL_TRACE(("Link UP\n"));
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 
 		}
 		net_os_wake_lock_timeout_enable(dev);
@@ -7523,38 +7025,6 @@ wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data)
 #endif 
 #endif 
 
-<<<<<<< HEAD:drivers/net/wireless/bcm4329/wl_iw.c
-	case WLC_E_ASSOCREQ_IE:
-		if (datalen > IW_CUSTOM_MAX)
-			break;
-
-		cmd = IWEVASSOCREQIE;
-		memcpy(extra, data, datalen);
-		wrqu.data.length = datalen;
-		break;
-#ifdef WLAN_PFN
-	case WLC_E_PFN_NET_FOUND:
-	{
-		wlc_ssid_t			* ssid;
-		if (iw_link_state)
-			break;
-		//if ((g_iscan) && (g_iscan->sysioc_pid >= 0)) {
-		{
-			//pfn_scan = 1;
-			net_os_wake_lock(dev);
-			wl_iw_set_pfn_timer(1);
-			ssid = (wlc_ssid_t *)data;
-			printk("pfn scan ssid = %s, len = %d\n", ssid->SSID, ssid->SSID_len);
-			//memset(pfn_ssid, 0, sizeof(pfn_ssid));
-			//pfn_ssid_len = strlen(ssid->SSID);
-			//strncpy(pfn_ssid, ssid->SSID, pfn_ssid_len);
-			//up(&g_iscan->sysioc_sem);
-		}
-		break;
-	}
-#endif
-=======
->>>>>>> master:drivers/net/wireless/bcm4329/wl_iw.c
 	case WLC_E_SCAN_COMPLETE:
 #if defined(WL_IW_USE_ISCAN)
 		if ((g_iscan) && (g_iscan->sysioc_pid >= 0) &&
@@ -7944,5 +7414,5 @@ void wl_iw_detach(void)
 		wl_iw_send_priv_event(priv_dev, "AP_DOWN");
 	}
 #endif
-	wl_iw_deactive();
+
 }
