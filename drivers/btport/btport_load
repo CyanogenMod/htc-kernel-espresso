@@ -1,0 +1,36 @@
+#!/bin/sh
+module="BtPort"
+device="BtPort"
+group="wheel"
+mode="664"
+sudo rm -f /dev/${device}0
+sudo rm -f /dev/${device}1
+sudo rm -f /dev/${device}2
+
+sudo /sbin/rmmod $module.ko $*
+
+# invoke insmod with all arguments we got
+sudo /sbin/insmod $module.ko $* || exit 1
+
+major=`cat /proc/devices | awk "\\$2==\"$module\" {print \\$1}"`
+
+# Remove stale nodes and replace them, then give gid and perms
+# Usually the script is shorter, it's scull that has several devices in it.
+
+#rm -f /dev/${device}2
+sudo mknod /dev/${device}0 c $major 0
+sudo mknod /dev/${device}1 c $major 1
+sudo mknod /dev/${device}2 c $major 2 
+
+sudo chgrp $group /dev/${device}0
+sudo chgrp $group /dev/${device}1
+sudo chgrp $group /dev/${device}2
+
+sudo chmod $mode  /dev/${device}0
+sudo chmod $mode  /dev/${device}1
+sudo chmod $mode  /dev/${device}2
+
+
+
+
+
