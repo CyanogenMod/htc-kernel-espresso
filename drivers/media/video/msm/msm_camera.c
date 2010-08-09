@@ -32,6 +32,7 @@
 #include <mach/camera.h>
 #include <asm/cacheflush.h>
 #include <linux/rtc.h>
+#include <mach/msm_flashlight.h>
 
 #define MSM_MAX_CAMERA_SENSORS 5
 
@@ -1714,6 +1715,10 @@ int msm_camera_flash(struct msm_sync *sync, int level)
 	sync->sdata->flash_cfg->postpone_led_mode = MSM_CAMERA_LED_OFF;
 
 	switch (level) {
+	case MSM_CAMERA_LED_DEATH_RAY:
+		flash_level = FL_MODE_DEATH_RAY;
+		phy_flash = 1;
+		break;
 	case MSM_CAMERA_LED_LOW_FOR_SNAPSHOT:
 		/* postpone set led low*/
 		sync->sdata->flash_cfg->postpone_led_mode = MSM_CAMERA_LED_LOW;
