@@ -39,33 +39,15 @@ ENTRY(msm_arch_idle)
 #if defined(CONFIG_MSM_FIQ_SUPPORT)
 	cpsid	f
 #endif
-
-#if defined(CONFIG_CPU_V7)
-	/* fragile: v7_flush_dcache_all has special one-off
-	 * calling conventions.
-	 */
-	stmfd	sp!, {r4-r5, r7, r9-r11, lr}
-	bl	v7_flush_dcache_all
-	ldmfd	sp!, {r4-r5, r7, r9-r11, lr}
-#else
-	mcr     p15, 0, r0, c7, c10, 0   /* flush the cache    */
-#endif
-
-	mrc     p15, 0, r1, c1, c0, 0    /* read current CR    */
+	mrc     p15, 0, r1, c1, c0, 0    /* read current CR    */ 
 	bic     r0, r1, #(1 << 2)        /* clear dcache bit   */
 	bic     r0, r0, #(1 << 12)       /* clear icache bit   */
 	mcr     p15, 0, r0, c1, c0, 0    /* disable d/i cache  */
 
 	mov     r0, #0                   /* prepare wfi value  */ /* also used as return value from msm_pm_collapse */
-
-#if defined(CONFIG_CPU_V7)
-	dsb
-	wfi
-#else
 	mcr     p15, 0, r0, c7, c10, 0   /* flush the cache    */
 	mcr     p15, 0, r0, c7, c10, 4   /* memory barrier     */
 	mcr     p15, 0, r0, c7, c0, 4    /* wait for interrupt */
-#endif
 
 	mcr     p15, 0, r1, c1, c0, 0    /* restore d/i cache  */
 #if defined(CONFIG_MSM_FIQ_SUPPORT)
