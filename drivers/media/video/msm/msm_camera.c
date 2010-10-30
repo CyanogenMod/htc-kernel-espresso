@@ -2532,6 +2532,169 @@ static int msm_tear_down_cdev(struct msm_device *msm, dev_t devno)
 	return 0;
 }
 
+static uint32_t led_ril_status_value;
+static uint32_t led_wimax_status_value;
+static uint32_t led_hotspot_status_value;
+static uint16_t led_low_temp_limit;
+static uint16_t led_low_cap_limit;
+static struct kobject *led_status_obj;
+
+static ssize_t led_ril_status_get(struct device *dev,
+                                struct device_attribute *attr, char *buf)
+{
+        ssize_t length;
+        length = sprintf(buf, "%d\n", led_ril_status_value);
+        return length;
+}
+
+static ssize_t led_ril_status_set(struct device *dev,
+                struct device_attribute *attr, const char *buf, size_t count)
+{
+        uint32_t tmp = 0;
+
+        tmp = buf[0] - 0x30; /* only get the first char */
+
+        led_ril_status_value = tmp;
+        pr_info("led_ril_status_value = %d\n", led_ril_status_value);
+        return count;
+}
+
+static ssize_t led_wimax_status_get(struct device *dev,
+                                struct device_attribute *attr, char *buf)
+{
+        ssize_t length;
+        length = sprintf(buf, "%d\n", led_wimax_status_value);
+        return length;
+}
+
+static ssize_t led_wimax_status_set(struct device *dev,
+                struct device_attribute *attr, const char *buf, size_t count)
+{
+        uint32_t tmp = 0;
+
+        tmp = buf[0] - 0x30; /* only get the first char */
+
+        led_wimax_status_value = tmp;
+        pr_info("led_wimax_status_value = %d\n", led_wimax_status_value);
+        return count;
+}
+
+static ssize_t led_hotspot_status_get(struct device *dev,
+                                struct device_attribute *attr, char *buf)
+{
+        ssize_t length;
+        length = sprintf(buf, "%d\n", led_hotspot_status_value);
+        return length;
+}
+
+static ssize_t led_hotspot_status_set(struct device *dev,
+                struct device_attribute *attr, const char *buf, size_t count)
+{
+        uint32_t tmp = 0;
+
+        tmp = buf[0] - 0x30; /* only get the first char */
+
+        led_hotspot_status_value = tmp;
+        pr_info("led_hotspot_status_value = %d\n", led_hotspot_status_value);
+        return count;
+}
+
+static ssize_t low_temp_limit_get(struct device *dev,
+                                struct device_attribute *attr, char *buf)
+{
+        ssize_t length;
+        length = sprintf(buf, "%d\n", led_low_temp_limit);
+        return length;
+}
+
+static ssize_t low_cap_limit_get(struct device *dev,
+                                struct device_attribute *attr, char *buf)
+{
+        ssize_t length;
+        length = sprintf(buf, "%d\n", led_low_cap_limit);
+        return length;
+}
+
+static DEVICE_ATTR(led_ril_status, 0644,
+        led_ril_status_get,
+        led_ril_status_set);
+
+static DEVICE_ATTR(led_wimax_status, 0644,
+        led_wimax_status_get,
+        led_wimax_status_set);
+
+static DEVICE_ATTR(led_hotspot_status, 0644,
+        led_hotspot_status_get,
+        led_hotspot_status_set);
+
+static DEVICE_ATTR(low_temp_limit, 0444,
+        low_temp_limit_get,
+        NULL);
+
+static DEVICE_ATTR(low_cap_limit, 0444,
+        low_cap_limit_get,
+        NULL);
+
+static int msm_camera_sysfs_init(struct msm_sync* sync)
+{
+        int ret = 0;
+        CDBG("msm_camera:kobject creat and add\n");
+        led_status_obj = kobject_create_and_add("camera_led_status", NULL);
+        if (led_status_obj == NULL) {
+                pr_info("msm_camera: subsystem_register failed\n");
+                ret = -ENOMEM;
+                goto error;
+        }
+
+        ret = sysfs_create_file(led_status_obj,
+                &dev_attr_led_ril_status.attr);
+        if (ret) {
+                pr_info("msm_camera: sysfs_create_file ril failed\n");
+                ret = -EFAULT;
+                goto error;
+        }
+
+        ret = sysfs_create_file(led_status_obj,
+                &dev_attr_led_wimax_status.attr);
+        if (ret) {
+                pr_info("msm_camera: sysfs_create_file wimax failed\n");
+                ret = -EFAULT;
+                goto error;
+        }
+
+        ret = sysfs_create_file(led_status_obj,
+                &dev_attr_led_hotspot_status.attr);
+        if (ret) {
+                pr_info("msm_camera: sysfs_create_file hotspot failed\n");
+                ret = -EFAULT;
+                goto error;
+        }
+
+        ret = sysfs_create_file(led_status_obj,
+                &dev_attr_low_temp_limit.attr);
+        if (ret) {
+                pr_info("msm_camera: sysfs_create_file low_temp_limit failed\n");
+                ret = -EFAULT;
+                goto error;
+        }
+
+        ret = sysfs_create_file(led_status_obj,
+                &dev_attr_low_cap_limit.attr);
+        if (ret) {
+                pr_info("msm_camera: sysfs_create_file low_cap_limit failed\n");
+                ret = -EFAULT;
+                goto error;
+        }
+
+        led_low_temp_limit = sync->sdata->flash_cfg->low_temp_limit;
+        led_low_cap_limit = sync->sdata->flash_cfg->low_cap_limit;
+
+        return ret;
+error:
+        kobject_del(led_status_obj);
+        return ret;
+}
+
 #ifdef CONFIG_MSM_CAMERA_V4L2
 int msm_v4l2_register(struct msm_v4l2_driver *drv)
 {
