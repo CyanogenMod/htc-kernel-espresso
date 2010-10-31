@@ -166,7 +166,7 @@ static void kgsl_hw_put_locked(bool start_timer)
 {
 	if ((--kgsl_driver.active_cnt == 0) && start_timer) {
 		mod_timer(&kgsl_driver.standby_timer,
-			  jiffies + msecs_to_jiffies(20));
+			  jiffies + msecs_to_jiffies(512));
 	}
 }
 
